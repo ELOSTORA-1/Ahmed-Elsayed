@@ -1,74 +1,63 @@
 pipeline {
     agent any
-
+    
     environment {
-        SONARQUBE_ENV = 'SonarQubeServer' // Replace with your SonarQube config name in Jenkins
-        SSH_CREDENTIALS_ID = 'linux-ssh-creds' // Jenkins credentials ID for SSH
-        DEPLOY_SERVER = 'your.linux.server.com' // Replace with your server IP or hostname
-        PROJECT_KEY = 'your-sonarqube-project-key' // SonarQube project key
-        DOTNET_VERSION = '7.0' // Adjust based on your .NET SDK version
+        SSH_CREDENTIALS_ID = '004d46ec-c37e-4940-94f7-57a32s58569eb'
+        DEPLOY_SERVER = '172.22.194.77'
+        DOTNET_VERSION = '9.0'
+        DEPLOY_PATH = '/home/Ahmed-Elsayed/App/dotnet'
     }
-
+    
     stages {
-        stage('Clone from GitHub') {
+        stage('Fetch Code') {
             steps {
-                git url: 'https://github.com/your-user/your-dotnet-repo.git', branch: 'main'
+                git url: 'https://github.com/ELOSTORA-1/dotnet.git', branch: 'main'
             }
         }
-
-        stage('Restore and Build') {
+        
+        stage('Restore And Build') {
             steps {
                 sh 'dotnet restore'
-                sh 'dotnet build --configuration Release'
+                sh 'dotnet build --configuration Release --no-restore'
             }
         }
-
-        stage('SonarQube Analysis') {
+        
+        stage('Publish App') {
             steps {
-                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                sh 'dotnet publish -c Release -o ./publish-output --no-build'
+            }
+        }
+        
+        stage('Deploy to Server') {
+            steps {
+                sshagent(credentials: ["${SSH_CREDENTIALS_ID}"]) {
                     sh """
-                        dotnet tool install --global dotnet-sonarscanner || true
-                        export PATH="$PATH:$HOME/.dotnet/tools"
-                        dotnet sonarscanner begin /k:"${PROJECT_KEY}" /d:sonar.host.url=$SONARQUBE_URL /d:sonar.login=$SONAR_AUTH_TOKEN
-                        dotnet build
-                        dotnet sonarscanner end /d:sonar.login=$SONAR_AUTH_TOKEN
-                    """
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        stage('Publish') {
-            steps {
-                sh 'dotnet publish -c Release -o published'
-            }
-        }
-
-        stage('Deploy to Linux Server') {
-            steps {
-                sshagent (credentials: ["${SSH_CREDENTIALS_ID}"]) {
-                    sh """
-                        scp -r published/* root@${DEPLOY_SERVER}:/var/www/your-dotnet-app/
-                        ssh user@${DEPLOY_SERVER} 'systemctl restart kestrel-yourapp.service'
+                        # Create directory if it doesn't exist
+                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "mkdir -p ${DEPLOY_PATH}"
+                        
+                        # Copy published files
+                        scp -o StrictHostKeyChecking=no -r ./publish-output/* root@${DEPLOY_SERVER}:${DEPLOY_PATH}/
+                        
+                        # Restart docker service
+                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'systemctl restart docker'
+                        
+                        # Optional: List deployed files for verification
+                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "ls -la ${DEPLOY_PATH}/"
                     """
                 }
             }
         }
     }
-
+    
     post {
         failure {
-            echo "Pipeline failed."
+            echo "pipeline failed"
         }
         success {
-            echo "Pipeline completed successfully!"
+            echo "pipeline success"
+        }
+        always {
+            cleanWs() // Clean workspace after build
         }
     }
 }
