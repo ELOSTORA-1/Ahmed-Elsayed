@@ -31,35 +31,21 @@ pipeline {
         stage('Deploy to Server') {
             steps {
                 sshagent(credentials: ["${SSH_CREDENTIALS_ID}"]) {
+                    // Create remote directory
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'mkdir -p ${DEPLOY_PATH}'"
+                    // Correct way to use scp (note: destination is a directory)
                     sh """
-                        # Create directory if it doesn't exist
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "
-                            mkdir -p ${DEPLOY_PATH}
-                            cd ${DEPLOY_PATH}
-                        "
-                        
-                        # Copy published files
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "
-                            scp -r ./publish-output/* root@${DEPLOY_SERVER}:${DEPLOY_PATH}/
-                        "
-                        #remove dotnet Docker image
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "
-                            docker container stop dotnet
-                            docker container rm dotnet
-                            docker image rm dotnet
-                        "
-                        #Rebuild Dotnet Docker image
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "
-                            cd ${DEPLOY_PATH}
-                            docker build --tag dotnet .
-                            docker container run -d -p 8080:80 --name dotnet --network host --memory 256M --cpus 1 dotnet 
-                        "
-                        # check
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "
-                            echo 'Deployment completed. Checking container status:'
-                            docker ps | grep dotnet && echo 'SUCCESS: Container is running' || echo 'ERROR: Container failed to start'
-                        "
-                    """
+                        rsync -avz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+                            ./publish-output/ root@${DEPLOY_SERVER}:${DEPLOY_PATH}/
+                       """
+                    // Stop and remove container and image if they exist
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker container stop dotnet || true'"
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker container rm dotnet || true'"
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker image rm dotnet || true'"
+                    // Build new Docker image and run container
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'cd ${DEPLOY_PATH} && docker build -t dotnet .'"
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker run -d -p 8080:80 --name dotnet --network host --memory 256M --cpus 1 dotnet'"
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker ps | grep dotnet && echo SUCCESS || echo FAILURE'"
                 }
             }
         }
