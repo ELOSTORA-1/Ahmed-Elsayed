@@ -33,16 +33,31 @@ pipeline {
                 sshagent(credentials: ["${SSH_CREDENTIALS_ID}"]) {
                     sh """
                         # Create directory if it doesn't exist
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "mkdir -p ${DEPLOY_PATH}"
+                        ssh root@${DEPLOY_SERVER} "
+                            mkdir -p ${DEPLOY_PATH}
+                            cd ${DEPLOY_PATH}
+                        "
                         
                         # Copy published files
-                        scp -o StrictHostKeyChecking=no -r ./publish-output/* root@${DEPLOY_SERVER}:${DEPLOY_PATH}/
-                        
+                        ssh root@${DEPLOY_SERVER} "
+                            scp -r ./publish-output/* root@${DEPLOY_SERVER}:${DEPLOY_PATH}/
+                        "
+                        #remove dotnet Docker image
+                        ssh root@${DEPLOY_SERVER} "
+                            docker container stop dotnet
+                            docker container rm dotnet
+                            docker image rm dotnet
+                        "
+                        #Rebuild Dotnet Docker image
+                        ssh root@${DEPLOY_SERVER} "
+                            cd ${DEPLOY_PATH}
+                            docker build --tag dotnet .
+                            docker container run -d -p 8080:80 --name dotnet --network host --memory 256M --cpus 1 dotnet 
+                        "
                         # Restart docker service
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'systemctl restart docker'
-                        
-                        # Optional: List deployed files for verification
-                        ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} "ls -la ${DEPLOY_PATH}/"
+                        ssh root@${DEPLOY_SERVER} "
+                            systemctl restart docker
+                        "
                     """
                 }
             }
