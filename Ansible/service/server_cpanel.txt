@@ -1,0 +1,58 @@
+- name: intall cpanel
+  hosts: all
+  become: yes
+  gather_facts: False
+  tasks:
+    - name: update
+      command: yum -y update
+    - name: set nameserver
+      copy:
+        content: 'nameserver 144.76.244.225'
+        dest: /etc/resolve.conf
+    - name: set hostname
+      command: hostnamectl set-hostname
+
+
+    - name: install package
+      yum:
+        name: "{{item}}"
+        state: present
+        loop:
+          - perl
+          - nano
+          - mailx
+          - strace
+          - net-tools
+          - bash-completion
+    - name: mkdir for cpanel version
+      file:
+        path: /etc/cpupdate.conf
+        state: touch
+        mode: '0644'
+    - name: change cpanel version
+      copy:
+        content: 'CPANEL=lts'
+        dest: /etc/cpupdate.conf
+
+    - name: mkdir for mysql version
+      file:
+        path: /root/cpanel_profile
+        state: directory
+        mode: '0755'
+    - name: touch new file
+      file:
+        path: /root/cpanel_profile/cpanel.config
+        state: touch
+        mode: '0644'
+    - name: change mysql version
+      copy:
+        content: 'mysql-version=10.5'
+        dest: /root/cpanel_profile/cpanel.config
+
+    - name: install cpanel
+      command: cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest && sh latest
+
+    - name: install cpanel
+      command: yum -y install ea-php82-*
+    - name: install cpanel
+      command: yum -y install ea-php82-php-*

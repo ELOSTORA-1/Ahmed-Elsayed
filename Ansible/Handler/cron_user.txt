@@ -1,0 +1,19 @@
+all:
+  hosts:
+    dev2:
+      ansible_host: 65.109.93.225
+      ansible_password: ubHFMvtw5fu8tr
+    dev:
+      ansible_host: 212.32.238.6
+      ansible_password: aKB80LStWh;H=6"£
+  children:
+    dev_serv:
+      hosts:
+        dev2:
+        dev:
+    parent:
+      children:
+        dev_serv:
+      vars:
+        ansible_user: root
+#       ansible_password:

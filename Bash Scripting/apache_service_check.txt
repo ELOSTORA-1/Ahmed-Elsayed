@@ -1,0 +1,52 @@
+#!/bin/bash
+# Apache Web Server Status Check
+
+# Check if Apache is running
+if systemctl status httpd > /dev/null 2>&1; then
+    echo "Apache Web Server is running."
+else
+    echo "Apache Web Server is down. Attempting to start it..."
+
+    # Try to start Apache
+    if systemctl start httpd > /dev/null 2>&1; then
+        echo "Apache Web Server started and is running now."
+    else
+        echo "Failed to start Apache. Replacing systemd service file..."
+
+        # Backup old service file
+        rm -rf /usr/lib/systemd/system/httpd.service.old 2>/dev/null
+        mv /usr/lib/systemd/system/httpd.service /usr/lib/systemd/system/httpd.service.old 2>/dev/null
+
+        # Write new systemd unit file
+        cat <<EOF > /usr/lib/systemd/system/httpd.service
+[Unit]
+Description=Apache web server managed by cPanel EasyApache
+ConditionPathExists=!/etc/httpddisable
+ConditionPathExists=!/etc/apachedisable
+ConditionPathExists=!/etc/httpdisable
+After=network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/cpanel/scripts/restartsrv_httpd --no-verbose
+ExecStop=/usr/local/cpanel/scripts/restartsrv_httpd stop --no-verbose
+ExecReload=/usr/local/cpanel/scripts/restartsrv_httpd --no-verbose
+PIDFile=/run/apache2/httpd.pid
+TimeoutStartSec=5m
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        echo "New Apache systemd unit file created. System Will reload systemd and try starting Apache again:"
+        systemctl daemon-reexec
+        systemctl start httpd
+        if systemctl status httpd > /dev/null 2>&1; then
+            echo "Apache Web Server is running."
+        else
+            echo "Sorry, Failed To Start Apache Web Server. "
+        fi
+    fi
+fi

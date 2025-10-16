@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+
+    environment {
+        SONARQUBE_ENV = 'SonarQubeServer' // Replace with your SonarQube config name in Jenkins
+        SSH_CREDENTIALS_ID = 'linux-ssh-creds' // Jenkins credentials ID for SSH
+        DEPLOY_SERVER = 'your.linux.server.com' // Replace with your server IP or hostname
+        PROJECT_KEY = 'your-sonarqube-project-key' // SonarQube project key
+        DOTNET_VERSION = '7.0' // Adjust based on your .NET SDK version
+    }
+
+    stages {
+        stage('Clone from GitHub') {
+            steps {
+                git url: 'https://github.com/your-user/your-dotnet-repo.git', branch: 'main'
+            }
+        }
+
+        stage('Restore and Build') {
+            steps {
+                sh 'dotnet restore'
+                sh 'dotnet build --configuration Release'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh """
+                        dotnet tool install --global dotnet-sonarscanner || true
+                        export PATH="$PATH:$HOME/.dotnet/tools"
+                        dotnet sonarscanner begin /k:"${PROJECT_KEY}" /d:sonar.host.url=$SONARQUBE_URL /d:sonar.login=$SONAR_AUTH_TOKEN
+                        dotnet build
+                        dotnet sonarscanner end /d:sonar.login=$SONAR_AUTH_TOKEN
+                    """
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Publish') {
+            steps {
+                sh 'dotnet publish -c Release -o published'
+            }
+        }
+
+        stage('Deploy to Linux Server') {
+            steps {
+                sshagent (credentials: ["${SSH_CREDENTIALS_ID}"]) {
+                    sh """
+                        scp -r published/* root@${DEPLOY_SERVER}:/var/www/your-dotnet-app/
+                        ssh user@${DEPLOY_SERVER} 'systemctl restart kestrel-yourapp.service'
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "Pipeline failed."
+        }
+        success {
+            echo "Pipeline completed successfully!"
+        }
+    }
+}

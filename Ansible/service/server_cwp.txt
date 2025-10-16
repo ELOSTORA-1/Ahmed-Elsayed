@@ -1,0 +1,31 @@
+- name: intall cwp
+  hosts: all
+  become: yes
+  gather_facts: False
+  tasks:
+    - name: update
+      command: yum -y update
+    - name: set nameserver
+      copy:
+        content: 'nameserver 144.76.244.225'
+        dest: /etc/resolve.conf
+    - name: set hostname
+      command: hostnamectl set-hostname
+
+
+    - name: install package
+      yum:
+        name: "{{item}}"
+        state: present
+        loop:
+          - perl
+          - nano
+          - mailx
+          - strace
+          - net-tools
+          - bash-completion
+          - vim
+          - wget
+
+    - name: install cpanel
+      command: cd /usr/local/src && wget http://centos-webpanel.com/cwp-el8-latest && sh cwp-el8-latest

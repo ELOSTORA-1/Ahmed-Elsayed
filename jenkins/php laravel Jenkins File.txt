@@ -1,0 +1,130 @@
+pipeline {
+    agent any
+    
+    environment {
+        SONARQUBE_ENV = 'sonar-qube'  // Your SonarQube server name in Jenkins
+        PROJECT_KEY = 'your-project-key'  // Your SonarQube project key
+        DEPLOY_SERVER = 'your-server.com'
+        DEPLOY_PATH = '/var/www/html'
+    }
+    
+    stages {
+        stage('Git Clone from GitHub') {
+            steps {
+                git url: 'https://github.com/hkhcoder/vprofile-project.git', branch: 'main'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh 'npm install'
+                sh 'npm run build'
+            }
+        }
+        
+        stage('Composer') {
+            steps {
+                sh 'composer install --no-dev --optimize-autoloader'
+                // Remove 'composer update' as it's not recommended in CI
+            }
+        }
+        
+        stage('Tests & Coverage') {
+            steps {
+                sh '''
+                    # Create reports directory
+                    mkdir -p reports
+                    # Run tests with coverage (adjust based on your test framework)
+                    ./vendor/bin/phpunit --coverage-clover=reports/coverage.xml --log-junit=reports/junit.xml
+                    # Or for Laravel:
+                    # php artisan test --coverage --coverage-clover=reports/coverage.xml --log-junit=reports/junit.xml
+                '''
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh """
+                        sonar-scanner \\
+                          -Dsonar.projectKey="${PROJECT_KEY}" \\
+                          -Dsonar.sources=. \\
+                          -Dsonar.host.url=\${SONARQUBE_URL} \\
+                          -Dsonar.login=\${SONAR_AUTH_TOKEN} \\
+                          -Dsonar.php.coverage.reportPaths=reports/coverage.xml \\
+                          -Dsonar.php.tests.reportPath=reports/junit.xml \\
+                          -Dsonar.exclusions="vendor/**, node_modules/**, storage/**, bootstrap/cache/**, public/build/**, tests/**" \\
+                          -Dsonar.coverage.exclusions="vendor/**, node_modules/**, storage/**, bootstrap/cache/**, public/build/**, tests/**"
+                    """
+                }
+            }
+        }
+        stage("if You Use Docker") {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh """
+                docker run --rm \\
+                  -e SONAR_HOST_URL="\${SONARQUBE_URL}" \\
+                  -e SONAR_SCANNER_OPTS="-Dsonar.projectKey=${PROJECT_KEY} -Dsonar.sources=. -Dsonar.php.coverage.reportPaths=reports/coverage.xml -Dsonar.php.tests.reportPath=reports/junit.xml" \\
+                  -v "$WORKSPACE:/usr/src" \\
+                  sonarsource/sonar-scanner-cli:latest
+            """
+                }
+            }
+        }
+        stage("Quality Gate") {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        stage("Deploy to Server") {
+            steps {
+                sshagent(['your-ssh-credentials-id']) {
+                    sh """
+                            # Copy files to server
+                            rsync -avz --delete \
+                                --exclude='.git' \
+                                --exclude='node_modules' \
+                                --exclude='vendor' \
+                                --exclude='storage/logs' \
+                                --exclude='.env' \
+                                ./ user@${DEPLOY_SERVER}:${DEPLOY_PATH}/temp/
+                            
+                            # SSH commands to deploy
+                            ssh -o StrictHostKeyChecking=no user@${DEPLOY_SERVER} '
+                                cd ${DEPLOY_PATH}
+                                cp .env temp/ 2>/dev/null || true
+                                rm -rf backup_$(date +%Y%m%d) 2>/dev/null || true
+                                mv current backup_$(date +%Y%m%d) 2>/dev/null || true
+                                mv temp current
+                                cd current
+                                composer install --no-dev --optimize-autoloader
+                                php artisan storage:link
+                                php artisan config:cache
+                                php artisan route:cache
+                                php artisan view:cache
+                                sudo chown -R www-data:www-data storage bootstrap/cache
+                                sudo chmod -R 775 storage bootstrap/cache
+                                sudo systemctl reload php-fpm
+                            '
+                        """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Clean up or archive artifacts
+            sh 'rm -rf reports/ || true'
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}

@@ -1,0 +1,4 @@
+<VirtualHost *:80>
+    ServerName halahq.ddns.net
+    Redirect permanent / https://halahq.ddns.net/
+</VirtualHost>

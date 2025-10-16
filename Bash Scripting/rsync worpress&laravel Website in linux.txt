@@ -1,0 +1,155 @@
+#!/usr/bin/bash
+
+
+#Made By : Eng Ahmed Elsayed
+
+
+# check server work with cpanel or cwp
+systemctl status cpanel > /dev/null 2>&1
+if [ `echo $?` -eq 0 ]; then
+        #Find Domain
+        echo "Enter Your Domain to Migrate"
+        read domain
+        #find Username
+        username=$(grep -i "$domain" /etc/domainusers | awk '{print $1}' | tr -d ':')
+        #Get Path of This Domain
+        path=$(grep -i "$username" /usr/local/apache/conf/httpd.conf | grep -i "DocumentRoot" | awk 'NR==1 {print $2 "/"}')
+        #do mysqldump
+        cd "$path"
+        ls wp-config.php > /dev/null 2>&1
+        if [ `echo $?` -eq 0 ]; then
+                db=$(grep -i "db_name" wp-config.php | awk '{print $3}' | tr -d "'")
+                rm -rf bk.sql
+                mysqldump $db > bk.sql
+                db_user=$(grep -i "DB_USER" wp-config.php | awk '{print $3}' | tr -d "'")
+                db_pass=$(grep -i "DB_PASS" wp-config.php | awk '{print $3}' | tr -d "'")
+                cd
+        else
+                ls .env > /dev/null 2>&1
+                if [ `echo $?` -eq 0 ]; then
+                        db2=$(grep -i "database" .env | cut -f 2 -d =)
+                        rm -rf bk.sql
+                        mysqldump $db2 > bk.sql
+                        db2_user=$(grep -i "DB_USERNAME" .env | cut -f 2 -d =)
+                        db2_pass=$(grep -i "DB_pass" .env | cut -f 2 -d =)
+                        cd
+                else
+                        echo "please Backup Mysql Manaual and Then Run the Script. "
+                        echo "Try To Make The Name Of Backup Mysql Is bk.sql. "
+                fi
+        fi
+        #transfer To Des Server
+        read -p "Enter Your remote ip : " ip
+        read -p "Enter Your Remote Path : " path2
+        rsync -avz "$path" root@"$ip":"$path2"
+else
+        systemctl status cwpsrv > /dev/null 2>&1
+        if [ `echo $?` -eq 0 ]; then
+                #Find Domain
+                echo "Enter Your Domain to Migrate"
+                read domain
+                #find Username
+                domain_config_file=$(find /usr/local/apache/conf.d/vhosts/ -name $domain.ssl.conf )
+                username=$(grep -i "DocumentRoot" $domain_config_file | awk '{print $2}' | cut -f 3 -d "/")
+                #Get Path of This Domain
+                path=$(grep -i "$username" /usr/local/apache/conf/httpd.conf | grep -i "DocumentRoot" | awk 'NR==1 {print $2 "/"}')
+                cd "$path"
+                ls wp-config.php > /dev/null 2>&1
+                if [ `echo $?` -eq 0 ]; then
+                        db=$(grep -i "db_name" wp-config.php | awk '{print $3}' | tr -d "'")
+                        rm -rf bk.sql
+                        mysqldump $db > bk.sql
+                        db_user=$(grep -i "DB_USER" wp-config.php | awk '{print $3}' | tr -d "'")
+                        db_pass=$(grep -i "DB_PASS" wp-config.php | awk '{print $3}' | tr -d "'")
+                        cd
+                else
+                        ls .env > /dev/null 2>&1
+                        if [ `echo $?` -eq 0 ]; then
+                                db2=$(grep -i "database" .env | cut -f 2 -d =)
+                                rm -rf bk.sql
+                                mysqldump $db2 > bk.sql
+                                db2_user=$(grep -i "DB_USERNAME" .env | cut -f 2 -d =)
+                                db2_pass=$(grep -i "DB_pass" .env | cut -f 2 -d =)
+                                cd
+                        else
+                                echo "please Backup Mysql Manaual and Then Run the Script. "
+                                echo "Try To Make The Name Of Backup Mysql Is bk.sql. "
+                        fi
+                fi
+                #transfer To Des Server
+                read -p "Enter Your remote ip : " ip
+                read -p "Enter Your Remote Path : " path2
+                rsync -avz "$path" root@"$ip":"$path2"
+        else
+                echo "Sorry, This Script Is Only For Whm/cpanel And Cwp Panel"
+                echo "Please Try Another Way To Transfer This Domain : $domain"
+        fi
+fi
+
+
+#configure Remote Host
+echo "Enter Remote Server SSh Port : "
+read port
+
+ssh -p $port root@$ip
+cd "$path2"
+
+#Get User For Destination Website
+
+echo " Enter The Remote UserName : "
+read rem_user
+
+chown $rem_user:$rem_user -R .
+
+echo " Enter The Name Of New Domain : "
+read rem_domain
+
+find . -type f -exec sed -i "s/$domain/$rem_domain/g" {} +
+
+# Get New Mysql Data
+
+echo " Make Sure You Created Mysql In remote Host"
+
+echo " Enter Remote Mysql Name "
+read rem_mysql
+
+echo " Enter Remote Mysql User "
+read rem_mysql_user
+
+echo " Enter Remote Mysql Pass"
+read rem_mysql_pass
+
+
+# Create the database with root
+#mysql -e "CREATE DATABASE IF NOT EXISTS $rem_mysql;"
+# Create user and grant all privileges
+#mysql -e "CREATE USER IF NOT EXISTS '$rem_mysql_user'@'localhost' IDENTIFIED BY '$rem_mysql_pass';"
+#mysql -e "GRANT ALL PRIVILEGES ON $rem_mysql.* TO '$rem_mysql_user'@'localhost';"
+#mysql -e "FLUSH PRIVILEGES;"
+
+
+mysql $rem_mysql < bk.sql
+if [ `echo $?` -eq 0 ]; then
+        echo "Database Successfully Updated."
+else
+        echo "Error In Restoring Database."
+fi
+
+#replace old mysql
+ls wp-config.php
+if [ `echo $?` -eq 0]; then
+        find . -type f -exec sed -i "s/$db/$rem_mysql/g" {} +
+        find . -type f -exec sed -i "s/$db_user/$rem_mysql_user/g" {} +
+        find . -type f -exec sed -i "s/$db_pass/$rem_mysql_pass/g" {} +
+else
+        ls .env
+        if [ `echo $?` -eq 0]; then
+                find . -type f -exec sed -i "s/$db2/$rem_mysql/g" {} +
+                find . -type f -exec sed -i "s/$db2_user/$rem_mysql_user/g" {} +
+                find . -type f -exec sed -i "s/$db2_pass/$rem_mysql_pass/g" {} +
+        else
+                echo " please update your database Data Manual"
+        fi
+fi
+
+logout

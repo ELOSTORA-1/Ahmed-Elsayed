@@ -1,0 +1,24 @@
+---
+- name: Install packages and configure httpd
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Install required packages
+      package:
+        name:
+          - httpd
+          - epel-release
+          - nano
+          - perl
+          - net-tools
+          - screen
+          - wget
+          - bash-completion
+        state: present
+
+    - name: Ensure httpd service is started and enabled
+      service:
+        name: httpd
+        state: started
+        enabled: yes

@@ -1,0 +1,1 @@
+sh create_bulk_emails_from_file.sh Domain email_prefixes.txt

@@ -1,0 +1,45 @@
+- name: start & stop Services
+  hosts: all
+  become: yes
+  gather_facts: False
+  tasks:
+    - name: start csf
+      ansible.builtin.service:
+        name: csf
+        state: started
+        enabled: yes
+    - name: start http
+      ansible.builtin.service:
+        name: httpd
+        state: started
+        enabled: yes
+    - name: start mysql
+      ansible.builtin.service:
+        name: mysqld
+        state: started
+        enabled: yes
+    - name: start cpanel
+      ansible.builtin.service:
+        name: cpanel
+        state: started
+        enabled: yes
+    - name: start named
+      ansible.builtin.service:
+        name: named
+        state: started
+        enabled: yes
+    - name: start Network Manager
+      ansible.builtin.service:
+        name: NetworkManager
+        state: started
+        enabled: yes
+    - name: stop network
+      ansible.builtin.service:
+        name: network
+        state: stoped
+        enabled: no
+    - name: stop firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: stoped
+        enabled: no

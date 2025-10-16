@@ -1,0 +1,13 @@
+- name: add new user to cron
+  hosts: all
+  become: yes
+  tasks:
+    - name: add new user to cron job
+      command:  echo "ahmed" >> /etc/cron.allow
+      notify: restart cron
+
+  handlers:
+    - name: restart cron
+      service:
+        name: crond
+        state: restarted

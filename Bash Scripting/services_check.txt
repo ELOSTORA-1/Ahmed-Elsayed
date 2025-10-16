@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Apache Check
+if systemctl status httpd > /dev/null 2>&1; then
+    echo " Apache Is Running. "
+else
+   echo " Apache Is Down at `date`. "
+fi
+
+# Mysql Check
+if systemctl status mysqld > /dev/null 2>&1; then
+    echo " Mysql Is Running. "
+else
+   echo " Mysql Is Down at `date`. "
+fi
+
+# Cpanel Check
+if systemctl status cpanel > /dev/null 2>&1; then
+    echo " Cpanel Is Running. "
+else
+   echo " Cpanel Is Down at `date`. "
+fi
+
+# Dns Check
+if systemctl status named > /dev/null 2>&1; then
+    echo " DNS Is Running. "
+else
+   echo " DNS Is Down at `date`. "
+fi
+
+# SuperVisor Check
+if systemctl status supervisord > /dev/null 2>&1; then
+    echo " Supervisor Is Running. "
+else
+   echo " supervisor Is Down at `date`. "
+fi

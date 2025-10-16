@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Configuration: Replace with your actual email and password
+NOIP_EMAIL="it@gostaion.net"
+NOIP_PASSWORD="Hala@dm!n2025"
+
+# Step 1: Kill existing noip2 processes
+echo "Killing existing noip2 processes..."
+pkill -f noip2
+
+# Wait briefly to ensure the process is terminated
+sleep 2
+
+# Step 2: Start noip2 with expect to handle prompts
+echo "Starting noip2..."
+/usr/bin/expect <<EOF
+  spawn /usr/local/bin/noip2
+  expect "Please enter the login/email string for no-ip.com"
+  send "$NOIP_EMAIL\r"
+  expect "Please enter the password for user '$NOIP_EMAIL'"
+  send "$NOIP_PASSWORD\r"
+  expect eof
+EOF
+
+# Check if noip2 is running
+if pgrep -f noip2 > /dev/null; then
+  echo "noip2 started successfully."
+else
+  echo "Failed to start noip2."
+  exit 1
+fi

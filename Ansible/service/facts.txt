@@ -1,0 +1,9 @@
+- name: test fact var
+  hosts: all
+  tasks:
+    - name : get os type
+      debug:
+        var: ansible_distribution
+    - name: get proc core
+      debug:
+        var: ansible_processor_cores

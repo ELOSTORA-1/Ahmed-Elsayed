@@ -1,0 +1,53 @@
+terraform {
+  required_providers {
+    proxmox = {
+      source  = "registry.terraform.io/telmate/proxmox"
+      version = "3.0.2-rc03"
+    }
+  }
+}
+
+provider "proxmox" {
+  pm_api_url      = "https://116.202.229.82:8006"
+  pm_user         = "root"
+  pm_password     = "XJbeSx_0D97=K32z"
+  pm_tls_insecure = true
+}
+
+resource "proxmox_vm_qemu" "almalinux_vm" {
+  name        = "terraform-test-vm"
+  target_node = "KVM01" #proxmox node name
+
+  # Basic VM configuration
+  clone  = "almaliniux" # Replace with your template name
+  cores  = 1
+  memory = 1024
+
+  # Network configuration
+  network {
+    model  = "virtio"
+    bridge = "vmbr0"
+  }
+
+  # Disk configuration
+  disk {
+    type    = "scsi"
+    storage = "local-lvm"
+    size    = "10G"
+  }
+
+  # Connection for provisioner
+  connection {
+    type     = "ssh"
+    user     = "root"
+    password = "XJbeSx_0D97=K32z"
+    host     = self.default_ipv4_address
+  }
+
+  # Provisioner to run free -h command
+  provisioner "remote-exec" {
+    inline = [
+      "free -h"
+    ]
+  }
+}
