@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        SSH_CREDENTIALS_ID = '004d46ec-c37e-4940-94f7-57a32s58569eb'
+        SSH_CREDENTIALS_ID = 'jenkins-id'
         DEPLOY_SERVER = '172.22.194.77'
         DOTNET_VERSION = '9.0'
         DEPLOY_PATH = '/home/Ahmed-Elsayed/App/dotnet'
