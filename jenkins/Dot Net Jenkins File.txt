@@ -3,9 +3,9 @@ pipeline {
     
     environment {
         SSH_CREDENTIALS_ID = 'jenkins-id'
-        DEPLOY_SERVER = '172.22.194.77'
+        DEPLOY_SERVER = '192.168.1.2'
         DOTNET_VERSION = '9.0'
-        DEPLOY_PATH = '/home/Ahmed-Elsayed/App/dotnet/dotnet'
+        DEPLOY_PATH = '/home/Ahmed-Elsayed/App/dotnet/dotnet-app'
     }
     
     stages {
@@ -32,6 +32,7 @@ pipeline {
             steps {
                 sshagent(credentials: ["${SSH_CREDENTIALS_ID}"]) {
                     // Create remote directory
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'rm -rf ${DEPLOY_PATH}'"
                     sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'mkdir -p ${DEPLOY_PATH}'"
                     // Copy Publish Data to Server
                     sh """
@@ -44,9 +45,12 @@ pipeline {
                     sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker container rm dotnet || true'"
                     sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker image rm dotnet || true'"
                     // Build new Docker image and run container
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'cp /home/Ahmed-Elsayed/App/dotnet/dotnet/Dockerfile ${DEPLOY_PATH}'"
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'cp /home/Ahmed-Elsayed/App/dotnet/dotnet/.dockerignore ${DEPLOY_PATH}'"
                     sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'cd ${DEPLOY_PATH} && docker build --tag dotnet .'"
                     sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker run -d -p 8080:80 --name dotnet --network host --memory 256M --cpus 1 dotnet'"
                     sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker ps | grep dotnet && echo SUCCESS || echo FAILURE'"
+                    sh "ssh -o StrictHostKeyChecking=no root@${DEPLOY_SERVER} 'docker container start dotnet'"
                 }
             }
         }
