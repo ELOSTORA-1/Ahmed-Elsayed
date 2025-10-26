@@ -1,0 +1,80 @@
+name: .Net App With Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  DEPLOY_SERVER: 192.168.1.2
+  DOTNET_VERSION: '9.0'
+  DEPLOY_PATH: /home/Ahmed-Elsayed/App/dotnet/dotnet-app
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: restore dependencies
+        run: dotnet restore
+      - name: Build Application
+        run: dotnet build --configuration Release --no-restore
+      - name: Publish Application
+        run: dotnet publish -c Release -o ./publish-output --no-build
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ env.DEPLOY_SERVER }}
+          user : root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script:
+            set -e
+            echo "cleaning old deploy dir"
+            rm -rf ${{ env.DEPLOY_PATH }}
+            mkdir -p ${{ env.DEPLOY_PATH }}
+
+      - name: copy publish app to app path
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.DEPLOY_SERVER }}
+          user : root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "./publish-output/*"
+          target: "${{ env.DEPLOY_PATH }}/"
+
+      - name: Deploy and Run Docker Container
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ env.DEPLOY_SERVER }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            echo "Stopping and removing old Docker resources..."
+            docker container stop dotnet || true
+            docker container rm dotnet || true
+            docker image rm dotnet || true
+
+            echo "Copying Dockerfile and .dockerignore..."
+            cp /home/Ahmed-Elsayed/App/dotnet/dotnet/Dockerfile ${{ env.DEPLOY_PATH }}
+            cp /home/Ahmed-Elsayed/App/dotnet/dotnet/.dockerignore ${{ env.DEPLOY_PATH }}
+
+            echo "Building Docker image..."
+            cd ${{ env.DEPLOY_PATH }}
+            docker build -t dotnet .
+
+            echo "Running Docker container..."
+            docker run -d -p 8080:80 --name dotnet --network host --memory 256M --cpus 1 dotnet
+
+            echo "Checking container status..."
+            docker ps | grep dotnet && echo "SUCCESS" || (echo "FAILURE" && exit 1)
